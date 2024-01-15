@@ -332,10 +332,6 @@ static int request_parse(request_t *const request, const ssize_t size)
     {
         for (; 0 != *parameters && '?' != *parameters; parameters++);
 
-        // for (char *c = parameters - 1;
-        //      request->title.path != c && '/' == *c;
-        //      *(c--) = 0);
-
         if (0 != *parameters)
         {
             *(parameters++) = 0;

@@ -16,9 +16,9 @@
 
 struct _worker
 {
-    int sock_pair[2];
+    int pipe[2];
+    size_t queue;
     int alive;
-    int active;
     int error;
     pthread_t thread;
     pthread_mutex_t mutex;
@@ -39,13 +39,13 @@ int worker_init(worker_t *worker, handler_list_t *handlers,
         || NULL == callback->func)
         return ERROR_WORKER_NULL;
 
-    worker->active = 0;
     worker->alive = 1;
     worker->error = 0;
     worker->head = handlers;
     worker->thread = 0;
-    worker->sock_pair[0] = 0;
-    worker->sock_pair[1] = 0;
+    worker->pipe[0] = 0;
+    worker->pipe[1] = 0;
+    worker->queue = 0;
     worker->callback = *callback;
 
     if (error)
@@ -56,7 +56,7 @@ int worker_init(worker_t *worker, handler_list_t *handlers,
         worker->ecallback.arg = NULL;
     }
 
-    int rc = socketpair(AF_UNIX, SOCK_STREAM, 0, worker->sock_pair);
+    int rc = pipe(worker->pipe);
 
     if (EXIT_SUCCESS != rc)
         rc = ERROR_WORKER_SOCKET_INIT;
@@ -96,7 +96,7 @@ int worker_is_active(worker_t *worker)
     if (NULL == worker)
         return ERROR_WORKER_NULL;
 
-    return worker->active;
+    return 0 < worker->queue;
 }
 
 int worker_error(worker_t *worker)
@@ -129,21 +129,23 @@ int worker_request(worker_t *worker, const int fd)
         rc =  ERROR_WORKER_NOT_ALIVE;
     }
 
-    if (EXIT_SUCCESS == rc && worker->active)
-    {
-        LOG_M(ERROR, "Attempt to request on active worker");
-        rc = ERROR_WORKER_ACTIVE;
-    }
+    // if (EXIT_SUCCESS == rc && worker->active)
+    // {
+    //     LOG_M(ERROR, "Attempt to request on active worker");
+    //     rc = ERROR_WORKER_ACTIVE;
+    // }
 
     if (EXIT_SUCCESS == rc)
     {
-        ssize_t size = write(worker->sock_pair[0], &fd, sizeof(int));
+        ssize_t size = write(worker->pipe[1], &fd, sizeof(int));
 
         if (sizeof(int) != size)
         {
             LOG_M(ERROR, "Error during request write");
             rc = ERROR_WORKER_UNABLE_TO_WRITE;
         }
+        else
+            worker->queue++;
     }
 
     if (EXIT_SUCCESS != pthread_mutex_unlock(&worker->mutex)
@@ -164,7 +166,7 @@ int worker_request_dispatch(worker_t *worker, const size_t size, const int fd)
     int rc = EXIT_SUCCESS;
     worker_t *chosen = NULL;
 
-    for (size_t i = 0; EXIT_SUCCESS == rc && !chosen && size > i; i++)
+    for (size_t i = 0; EXIT_SUCCESS == rc && size > i; i++)
     {
         worker_t *current = worker + i;
 
@@ -173,7 +175,8 @@ int worker_request_dispatch(worker_t *worker, const size_t size, const int fd)
         if (EXIT_SUCCESS != rc)
             rc = ERROR_WORKER_LOCK;
 
-        if (EXIT_SUCCESS == rc && current->alive && !current->active)
+        if (EXIT_SUCCESS == rc && current->alive
+            && (!chosen || chosen->queue > current->queue))
             chosen = current;
 
         if (EXIT_SUCCESS == rc)
@@ -183,20 +186,19 @@ int worker_request_dispatch(worker_t *worker, const size_t size, const int fd)
             if (EXIT_SUCCESS != rc)
                 rc = ERROR_WORKER_LOCK;
         }
-
-        if (EXIT_SUCCESS == rc && chosen)
-        {
-            rc = worker_request(chosen, fd);
-
-            if (ERROR_WORKER_NOT_ALIVE == rc || ERROR_WORKER_ACTIVE == rc)
-            {
-                chosen = NULL;
-                rc = EXIT_SUCCESS;
-            }
-        }
     }
 
-    if (EXIT_SUCCESS == rc && !chosen)
+    if (EXIT_SUCCESS == rc && chosen)
+    {
+        rc = worker_request(chosen, fd);
+
+        if (ERROR_WORKER_NOT_ALIVE == rc || ERROR_WORKER_ACTIVE == rc)
+        {
+            chosen = NULL;
+            rc = EXIT_SUCCESS;
+        }
+    }
+    else if (EXIT_SUCCESS == rc && !chosen)
         rc = ERROR_WORKER_OVERLOAD;
 
     return rc;
@@ -216,7 +218,7 @@ int worker_wake_up(worker_t *worker, const size_t size)
         {
             LOG_F(INFO, "Worker %zu[%d] down", i, worker->thread);
 
-            worker->active = 0;
+            worker->queue = 0;
             worker->alive = 1;
             worker->error = 0;
             worker->thread = 0;
@@ -272,7 +274,7 @@ void *worker_main(void *arg)
     for (int rc = EXIT_SUCCESS, rclock = EXIT_SUCCESS, crc = EXIT_SUCCESS;
          worker->alive;)
     {
-        ssize_t size = read(worker->sock_pair[1], &fd, sizeof(int));
+        ssize_t size = read(worker->pipe[0], &fd, sizeof(int));
 
         WLOG_F(INFO, "New request: %d", fd);
 
@@ -296,15 +298,6 @@ void *worker_main(void *arg)
         {
             WLOG_M(INFO, "Exit signal caught");
             rc = EXIT_FAILURE;
-        }
-
-        if (EXIT_SUCCESS == rc)
-            rclock = pthread_mutex_lock(&worker->mutex);
-
-        if (EXIT_SUCCESS == rc && EXIT_SUCCESS == rclock)
-        {
-            worker->active = 1;
-            rclock = pthread_mutex_unlock(&worker->mutex);
         }
 
         if (EXIT_SUCCESS == rc && EXIT_SUCCESS == rclock)
@@ -380,7 +373,7 @@ void *worker_main(void *arg)
 
             if (EXIT_SUCCESS == rclock)
             {
-                worker->active = 0;
+                --worker->queue;
                 rclock = pthread_mutex_unlock(&worker->mutex);
             }
         }
@@ -388,7 +381,6 @@ void *worker_main(void *arg)
         if (EXIT_SUCCESS != rclock)
         {
             WLOG_M(INFO, "Mutex error");
-            worker->active = 0;
             worker->alive = 0;
             worker->error = WORKER_ERROR_LOCK;
         }
@@ -408,7 +400,7 @@ void worker_destroy(worker_t *worker)
     if (0 != worker->thread)
     {
         int fd = -1;
-        ssize_t size = write(worker->sock_pair[0], &fd, sizeof(int));
+        ssize_t size = write(worker->pipe[1], &fd, sizeof(int));
 
         if (-1 != size)
             pthread_join(worker->thread, NULL);
@@ -417,11 +409,11 @@ void worker_destroy(worker_t *worker)
     pthread_mutex_destroy(&worker->mutex);
 
     for (size_t i = 0; 2 > i; i++)
-        if (0 != worker->sock_pair[i])
-            close(worker->sock_pair[i]);
+        if (0 != worker->pipe[i])
+            close(worker->pipe[i]);
 
     worker->alive = 0;
-    worker->active = 0;
+    worker->queue = 0;
     worker->thread = 0;
     worker->error = 0;
     worker->head = NULL;

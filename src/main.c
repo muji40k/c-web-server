@@ -9,9 +9,7 @@
 #include "server.h"
 #include "handler.h"
 
-#include "dummy_request.h"
 #include "index_request.h"
-#include "file_request.h"
 #include "partial_file_request.h"
 #include "unknown_request.h"
 
@@ -216,12 +214,6 @@ server_t *setup_server(const struct args *const args)
 
     if (EXIT_SUCCESS == rc)
     {
-        handler = dummy_request_get();
-        rc = server_register_handler(server, &handler);
-    }
-
-    if (EXIT_SUCCESS == rc)
-    {
         handler = index_request_get();
         rc = server_register_handler(server, &handler);
     }
@@ -256,9 +248,6 @@ server_t *setup_server(const struct args *const args)
             type.ext = "html";
             type.mime = "text/html; charset=UTF-8";
             file_type_bank_add(bank, &type);
-            // type.ext = "htm";
-            // type.mime = "text/html; charset=UTF-8";
-            // file_type_bank_add(bank, &type);
             type.ext = "css";
             type.mime = "text/css";
             file_type_bank_add(bank, &type);
@@ -282,12 +271,6 @@ server_t *setup_server(const struct args *const args)
         handler = unknown_request_get();
         rc = server_register_handler(server, &handler);
     }
-
-    // if (EXIT_SUCCESS == rc)
-    // {
-    //     handler = print_request_get();
-    //     rc = server_register_handler(server, &handler);
-    // }
 
     if (EXIT_SUCCESS == rc)
         LOG_M(INFO, "Server setup correct");

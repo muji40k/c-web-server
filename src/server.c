@@ -17,15 +17,6 @@
 
 #define TIMEOUT_MULTIPLEXER 500
 #define TIMEOUT_CONNECTION  5000
-// #define TIMEOUT_CONNECTION  0
-
-static pthread_mutex_t stat_mutex;
-static size_t accepted = 0;
-static size_t correct = 0;
-static size_t error = 0;
-static size_t rejected = 0;
-static size_t refused = 0;
-static size_t timeout = 0;
 
 struct _server
 {
@@ -78,8 +69,6 @@ int server_setup(void)
 
     if (EXIT_SUCCESS == rc)
         rc = pthread_mutex_init(&mutex, NULL);
-
-    pthread_mutex_init(&stat_mutex, NULL);
 
     if (EXIT_SUCCESS != rc)
         server_destroy();
@@ -243,10 +232,6 @@ static int server_process_connections(server_t *const server,
 
                     if (EXIT_SUCCESS != close(*socket))
                         rc = rc ? rc : ERROR_SERVER_CLOSE;
-
-                    pthread_mutex_lock(&stat_mutex);
-                    refused++;
-                    pthread_mutex_unlock(&stat_mutex);
                 }
 
                 int rrc = multiplexer_remove(server->multiplexer, *socket);
@@ -266,12 +251,7 @@ static int server_process_connections(server_t *const server,
                 int conn_fd = accept(listen_fd, NULL, NULL);
 
                 if (-1 != conn_fd)
-                {
                     LOG_F(INFO, "New connection: %d", conn_fd);
-                    pthread_mutex_lock(&stat_mutex);
-                    accepted++;
-                    pthread_mutex_unlock(&stat_mutex);
-                }
                 else
                 {
                     LOG_M(ERROR, "Unable to accept connection");
@@ -291,10 +271,6 @@ static int server_process_connections(server_t *const server,
                             rc = ERROR_SERVER_CLOSE;
                         else
                             rc = EXIT_SUCCESS;
-
-                        pthread_mutex_lock(&stat_mutex);
-                        rejected++;
-                        pthread_mutex_unlock(&stat_mutex);
                     }
                     else if (EXIT_SUCCESS != rc)
                     {
@@ -304,10 +280,6 @@ static int server_process_connections(server_t *const server,
                             rc = ERROR_SERVER_CLOSE;
                         else
                             rc = EXIT_SUCCESS;
-
-                        pthread_mutex_lock(&stat_mutex);
-                        rejected++;
-                        pthread_mutex_unlock(&stat_mutex);
                     }
                 }
             }
@@ -350,10 +322,6 @@ static int server_process_timeout(list_t *const deleted)
         }
         else if (EXIT_SUCCESS != close(*socket))
             rc = ERROR_SERVER_CLOSE;
-
-        pthread_mutex_lock(&stat_mutex);
-        timeout++;
-        pthread_mutex_unlock(&stat_mutex);
     }
 
     list_iterator_free(&iter);
@@ -499,18 +467,6 @@ int server_mainloop(server_t *const server)
             LOG_M(ERROR, "Unable to drop server watcher");
     }
 
-    printf("\n"
-           "Accepted: %zu\n"
-           "Correct:  %zu\n"
-           "Rejected: %zu\n"
-           "Refused: %zu\n"
-           "Timeout:  %zu\n"
-           "Sum:      %zu\n"
-           "Error:    %zu\n",
-           accepted, correct, rejected, refused, timeout,
-           correct + rejected + timeout + refused,
-           error);
-
     LOG_M(INFO, "Server down");
 
     return rc;
@@ -640,10 +596,6 @@ static int worker_callback(void *arg, int socket)
     if (0 <= socket && EXIT_SUCCESS != close(socket))
         rc = ERROR_SERVER_CLOSE;
 
-    pthread_mutex_lock(&stat_mutex);
-    correct++;
-    pthread_mutex_unlock(&stat_mutex);
-
     return rc;
 }
 
@@ -699,10 +651,6 @@ static void worker_error_func(void *arg, int socket, int error)
 
     if (!buffer)
         return;
-
-    pthread_mutex_lock(&stat_mutex);
-    error++;
-    pthread_mutex_unlock(&stat_mutex);
 
     snprintf(buffer, len + 1, FORM, code, msg, desc);
     send(socket, buffer, len, 0);
