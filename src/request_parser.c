@@ -114,8 +114,7 @@ int request_read_exist(request_t *request, const int socket)
         return ERROR_REQUEST_PARSER_INVALID_SOCKET;
 
     ssize_t size = 0;
-    list_filter_t filter;
-    list_misc_init_remove_all(&filter);
+    list_filter_t filter = list_misc_init_remove_all();
     rc = list_remove(request->headers, &filter);
 
     if (EXIT_SUCCESS != rc)

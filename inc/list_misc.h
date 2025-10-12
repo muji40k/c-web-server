@@ -3,7 +3,7 @@
 
 #include "list.h"
 
-void list_misc_init_remove_all(list_filter_t *filter);
+list_filter_t list_misc_init_remove_all(void);
 
 #endif
 

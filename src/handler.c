@@ -110,14 +110,14 @@ void handler_list_free(handler_list_t **list)
     if (NULL == list || NULL == *list)
         return;
 
-    list_iterator_t *iter = list_begin((*list)->list),
-                    *end = list_end((*list)->list);
+    list_iterator_t *iter = list_iter((*list)->list);
 
-    if (NULL != iter && NULL != end)
+    if (NULL != iter)
     {
-        for (; list_iterator_ne(end, iter); list_iterator_next(iter))
+        for (list_iterator_item_t item = list_iterator_next(iter);
+            item.next; item = list_iterator_next(iter))
         {
-            handler_t *handler = list_iterator_get(iter);
+            handler_t *handler = item.value;
 
             if (handler && handler->free_callback)
                 handler->free_callback(&handler->arg);
@@ -125,7 +125,6 @@ void handler_list_free(handler_list_t **list)
     }
 
     list_iterator_free(&iter);
-    list_iterator_free(&end);
 
     list_free(&(*list)->list);
     free(*list);

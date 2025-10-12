@@ -26,32 +26,23 @@ static int list_item_alloc(list_item_t **item, const void *const value, const si
 static void *list_item_get(list_item_t *item);
 static void list_item_free(list_item_t **item);
 
-void *list_iterator_get(list_iterator_t *const iter)
+list_iterator_item_t list_iterator_next(list_iterator_t *const iter)
 {
-    if (NULL == iter || NULL == iter->current)
-        return errno = ERROR_LIST_ITERATOR_NULL, NULL;
+    list_iterator_item_t out = {
+        .value = NULL,
+        .next = 0,
+    };
 
-    return list_item_get(iter->current);
-}
-
-int list_iterator_next(list_iterator_t *const iter)
-{
     if (NULL == iter)
-        return ERROR_LIST_ITERATOR_NULL;
+        return errno = ERROR_LIST_ITERATOR_NULL, out;
 
-    if (iter->current)
+    if (iter->current) {
+        out.next = 1;
+        out.value = list_item_get(iter->current);
         iter->current = iter->current->next;
+    }
 
-    return EXIT_SUCCESS;
-}
-
-int list_iterator_ne(const list_iterator_t *const iter1,
-                     const list_iterator_t *const iter2)
-{
-    if (NULL == iter1 || NULL == iter2)
-        return 1;
-
-    return iter1->current != iter2->current;
+    return out;
 }
 
 void list_iterator_free(list_iterator_t **iter)
@@ -264,7 +255,7 @@ int list_remove(list_t *const list, const list_filter_t *const filter)
     return EXIT_SUCCESS;
 }
 
-list_iterator_t *list_begin(list_t *const list)
+list_iterator_t *list_iter(list_t *const list)
 {
     int rc = list_check(list);
 
@@ -277,23 +268,6 @@ list_iterator_t *list_begin(list_t *const list)
         return errno = ERROR_LIST_ALLOCATION, NULL;
 
     out->current = list->begin;
-
-    return out;
-}
-
-list_iterator_t *list_end(list_t *const list)
-{
-    int rc = list_check(list);
-
-    if (EXIT_SUCCESS != rc)
-        return errno = rc, NULL;
-
-    list_iterator_t *out = malloc(sizeof(list_iterator_t));
-
-    if (NULL == out)
-        return errno = ERROR_LIST_ALLOCATION, NULL;
-
-    out->current = NULL;
 
     return out;
 }

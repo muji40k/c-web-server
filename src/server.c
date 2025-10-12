@@ -12,6 +12,7 @@
 #include "logger.h"
 
 #include "multiplexer.h"
+#include "pselect.h"
 #include "worker.h"
 #include "list.h"
 
@@ -107,19 +108,18 @@ void server_termination_handler(int signum)
     if (EXIT_SUCCESS != pthread_mutex_lock(&mutex))
         return;
 
-    list_iterator_t *iter = list_begin(servers), *end = list_end(servers);
-    server_status_t *status = NULL;
+    list_iterator_t *iter = list_iter(servers);
 
-    for (; list_iterator_ne(iter, end); list_iterator_next(iter))
+    for (list_iterator_item_t item = list_iterator_next(iter);
+         item.next; item = list_iterator_next(iter))
     {
-        status = list_iterator_get(iter);
+        server_status_t *status = item.value;
 
         if (status)
             status->run = 0;
     }
 
     list_iterator_free(&iter);
-    list_iterator_free(&end);
 
     pthread_mutex_unlock(&mutex);
 }
@@ -161,7 +161,7 @@ server_t *server_init(int port, size_t max_threads)
 
     if (EXIT_SUCCESS == rc)
     {
-        server->multiplexer = multiplexer_init();
+        server->multiplexer = pselect_multiplexer();
 
         if (NULL == server->multiplexer)
             rc = errno;
@@ -198,18 +198,19 @@ static int server_process_connections(server_t *const server,
 {
     int rc = EXIT_SUCCESS;
 
-    list_iterator_t *iter = list_begin(ready), *end = list_end(ready);
+    list_iterator_t *iter = list_iter(ready);
 
-    if (NULL == iter || NULL == end)
+    if (NULL == iter)
     {
         LOG_M(ERROR, "Unable to access socket pool");
         rc = ERROR_SERVER_ALLOCATION;
     }
 
-    for (; EXIT_SUCCESS == rc && list_iterator_ne(iter, end);
-         list_iterator_next(iter))
+    for (list_iterator_item_t item = list_iterator_next(iter);
+         EXIT_SUCCESS == rc && item.next;
+         item = list_iterator_next(iter))
     {
-        int *socket = list_iterator_get(iter);
+        int *socket = item.value;
 
         if (NULL == socket)
         {
@@ -287,7 +288,6 @@ static int server_process_connections(server_t *const server,
     }
 
     list_iterator_free(&iter);
-    list_iterator_free(&end);
 
     return rc;
 }
@@ -296,18 +296,19 @@ static int server_process_timeout(list_t *const deleted)
 {
     int rc = EXIT_SUCCESS;
 
-    list_iterator_t *iter = list_begin(deleted), *end  = list_end(deleted);
+    list_iterator_t *iter = list_iter(deleted);
 
-    if (NULL == iter || NULL == end)
+    if (NULL == iter)
     {
         LOG_M(ERROR, "Unable to access socket pool");
         rc = ERROR_SERVER_ALLOCATION;
     }
 
-    for (; EXIT_SUCCESS == rc && list_iterator_ne(iter, end);
-         list_iterator_next(iter))
+    for (list_iterator_item_t item = list_iterator_next(iter);
+         EXIT_SUCCESS == rc && item.next;
+         item = list_iterator_next(iter))
     {
-        int *socket = list_iterator_get(iter);
+        int *socket = item.value;
 
         if (NULL != socket)
         {
@@ -325,7 +326,6 @@ static int server_process_timeout(list_t *const deleted)
     }
 
     list_iterator_free(&iter);
-    list_iterator_free(&end);
 
     return rc;
 }

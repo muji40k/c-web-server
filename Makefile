@@ -24,7 +24,7 @@ ADDFLAGS =
 
 .PHONY: build debug clean run test default
 
-default: drun
+default: build
 
 run: build
 run:

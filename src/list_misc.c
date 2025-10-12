@@ -8,13 +8,13 @@ static int remove_all(const void *const arg, const void *const value)
     return 1;
 }
 
-void list_misc_init_remove_all(list_filter_t *filter)
+list_filter_t list_misc_init_remove_all(void)
 {
-    if (NULL == filter)
-        return;
-
-    filter->check = remove_all;
-    filter->arg = NULL;
+    list_filter_t out = {
+        .check = remove_all,
+        .arg = NULL,
+    };
+    return out;
 }
 
 
