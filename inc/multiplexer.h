@@ -16,8 +16,7 @@
 #define ERROR_MULTIPLEXER_OVERFLOW        1
 #define ERROR_MULTIPLEXER_INTERNAL        1
 
-enum
-{
+enum {
     READ  = 1,
     WRITE = 2
 };

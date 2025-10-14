@@ -3,8 +3,7 @@
 
 #include <stdarg.h>
 
-typedef enum
-{
+typedef enum {
     ERROR,
     WARNING,
     INFO,
@@ -12,8 +11,7 @@ typedef enum
     ALL
 } log_level_t;
 
-typedef struct
-{
+typedef struct {
     log_level_t limit;
     void (*function)(void *arg, log_level_t level, const char *const format,
                      va_list list);

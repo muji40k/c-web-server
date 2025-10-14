@@ -26,14 +26,12 @@
 
 typedef struct _worker worker_t;
 
-typedef struct
-{
+typedef struct {
     void *arg;
     int (*func)(void *arg, int socket);
 } worker_callback_t;
 
-typedef struct
-{
+typedef struct {
     void *arg;
     void (*func)(void *arg, int socket, int error);
 } worker_error_t;

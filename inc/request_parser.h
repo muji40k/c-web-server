@@ -18,8 +18,7 @@
 
 typedef struct _request request_t;
 
-typedef struct
-{
+typedef struct {
     const char *method;
     const char *path;
     const char *version;

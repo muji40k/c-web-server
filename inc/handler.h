@@ -16,8 +16,7 @@
 typedef int (*handler_func_t)(const int fd, const request_t *const request,
                               void *arg);
 
-typedef struct
-{
+typedef struct {
     int (*check)(const request_t *const request);
     handler_func_t function;
     void *arg;

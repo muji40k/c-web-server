@@ -2,8 +2,9 @@
 
 static int remove_all(const void *const arg, const void *const value)
 {
-    if (arg || !value)
+    if (arg || !value) {
         return 0;
+    }
 
     return 1;
 }

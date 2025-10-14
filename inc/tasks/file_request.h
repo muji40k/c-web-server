@@ -6,8 +6,7 @@
 #include "list.h"
 #include "handler.h"
 
-typedef struct
-{
+typedef struct {
     const char *ext;
     const char *mime;
     const char *addition;

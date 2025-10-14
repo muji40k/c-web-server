@@ -23,15 +23,17 @@
 
 static int check(const request_t *const request)
 {
-    if (NULL == request)
+    if (NULL == request) {
         return 0;
+    }
 
     const request_title_t *title = request_title(request);
 
     if (NULL == title
         || (strcmp("GET", title->method)
-            && strcmp("HEAD", title->method)))
+            && strcmp("HEAD", title->method))) {
         return 0;
+    }
 
     return 1;
 }
@@ -46,8 +48,7 @@ static int send_not_found(const int fd)
     int rc = EXIT_SUCCESS;
     ssize_t len = strlen(NOT_FOUND);
 
-    if (len != send(fd, NOT_FOUND, len, 0))
-    {
+    if (len != send(fd, NOT_FOUND, len, 0)) {
         char buf[200];
         strerror_r(errno, buf, 200);
         WLOG_F(ERROR, "send error: %s", buf);
@@ -63,57 +64,48 @@ static int send_file(const int socket, const int file, const file_type_t *type,
     int rc = EXIT_SUCCESS;
     char *buffer = malloc(BUFSIZE);
 
-    if (NULL == buffer)
-    {
+    if (NULL == buffer) {
         WLOG_M(ERROR, "Allocation error");
-
         return EXIT_FAILURE;
     }
 
     int hlen = sprintf(buffer, FORMAT CRLF, type->mime, type->addition);
     struct stat stat;
 
-    if (0 > hlen)
-    {
+    if (0 > hlen) {
         WLOG_M(ERROR, "sprintf error");
         rc = EXIT_FAILURE;
     }
 
-    if (EXIT_SUCCESS == rc && -1 == fstat(file, &stat))
-    {
+    if (EXIT_SUCCESS == rc && -1 == fstat(file, &stat)) {
         WLOG_M(ERROR, "sprintf error");
         rc = EXIT_FAILURE;
     }
 
-    if (EXIT_SUCCESS == rc && head)
-    {
-        if (hlen != send(socket, buffer, hlen, 0))
-        {
+    if (EXIT_SUCCESS == rc && head) {
+        if (hlen != send(socket, buffer, hlen, 0)) {
             char buf[200];
             strerror_r(errno, buf, 200);
             WLOG_F(ERROR, "send error: %s", buf);
             rc = EXIT_FAILURE;
         }
-    }
-    else if (EXIT_SUCCESS == rc)
-    {
+    } else if (EXIT_SUCCESS == rc) {
         ssize_t offset = hlen;
         ssize_t step = BUFSIZE - hlen;
         char *bbuf = buffer + hlen;
 
         for (size_t start = 0, end = step;
              EXIT_SUCCESS == rc && (size_t)stat.st_size > start;
-             start = end)
-        {
+             start = end) {
             end = start + step;
 
-            if (end > (size_t)stat.st_size)
+            if (end > (size_t)stat.st_size) {
                 end = stat.st_size;
+            }
 
             ssize_t rd = read(file, bbuf, step);
 
-            if (-1 == rd)
-            {
+            if (-1 == rd) {
                 char buf[200];
                 strerror_r(errno, buf, 200);
                 WLOG_F(ERROR, "read error: %s", buf);
@@ -123,16 +115,14 @@ static int send_file(const int socket, const int file, const file_type_t *type,
             ssize_t total = offset + rd;
 
             if (EXIT_SUCCESS == rc
-                && total != send(socket, buffer, total, 0))
-            {
+                && total != send(socket, buffer, total, 0)) {
                 char buf[200];
                 strerror_r(errno, buf, 200);
                 WLOG_F(ERROR, "send error: %s", buf);
                 rc = EXIT_FAILURE;
             }
 
-            if (offset)
-            {
+            if (offset) {
                 bbuf = buffer;
                 step = BUFSIZE;
                 offset = 0;
@@ -147,26 +137,23 @@ static int send_file(const int socket, const int file, const file_type_t *type,
 
 static int func(const int fd, const request_t *const request, void *arg)
 {
-    if (0 > fd || NULL == request || NULL == arg)
-    {
+    if (0 > fd || NULL == request || NULL == arg) {
         WLOG_M(ERROR, "Unexpected arguments in file handler");
-
         return EXIT_FAILURE;
     }
 
     const request_title_t *title = request_title(request);
 
-    if (!title)
-    {
+    if (!title) {
         WLOG_M(ERROR, "Internel request_t error");
-
         return EXIT_FAILURE;
     }
 
     int head = 0;
 
-    if (!strcmp(title->method, "HEAD"))
+    if (!strcmp(title->method, "HEAD")) {
         head = 1;
+    }
 
     WLOG_F(DEBUG, "File request for file: \"%s\"", title->path);
 
@@ -175,18 +162,13 @@ static int func(const int fd, const request_t *const request, void *arg)
     int file = open(title->path, O_RDONLY);
     int rc = EXIT_SUCCESS;
 
-    if (-1 == file && ENOENT == errno)
-    {
+    if (-1 == file && ENOENT == errno) {
         WLOG_F(WARNING, "Request for unknown file \"%s\"", title->path);
         rc = send_not_found(fd);
-    }
-    else if (-1 != file)
-    {
+    } else if (-1 != file) {
         rc = send_file(fd, file, type, head);
         close(file);
-    }
-    else
-    {
+    } else {
         char buf[200];
         strerror_r(errno, buf, 200);
         WLOG_F(ERROR, "open error: %s", buf);

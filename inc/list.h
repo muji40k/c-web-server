@@ -13,14 +13,12 @@
 typedef struct _list list_t;
 typedef struct _list_iterator list_iterator_t;
 
-typedef struct
-{
+typedef struct {
     int (*check)(const void *const arg, const void *const value);
     const void *arg;
 } list_filter_t;
 
-typedef struct
-{
+typedef struct {
     void *value;
     int next;
 } list_iterator_item_t;
