@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "list_misc.h"
+#include "misc.h"
 
 typedef struct {
     int fd;
@@ -162,12 +163,6 @@ struct timeout_handler
     list_t *deleted;
 };
 
-static size_t get_diff(const struct timeval *begin, const struct timeval *end)
-{
-    return (end->tv_sec - begin->tv_sec) * 1000
-           + (end->tv_usec - begin->tv_usec) / 1000;
-}
-
 static int remove_timeout(const void *const arg, const void *const value)
 {
     if (NULL == arg || NULL == value) {
@@ -185,7 +180,7 @@ static int remove_timeout(const void *const arg, const void *const value)
         return 0;
     }
 
-    size_t diff = get_diff(&status->entered, &handler->now);
+    size_t diff = get_time_diff_ms(&status->entered, &handler->now);
 
     if (diff < status->timeout) {
         return 0;
