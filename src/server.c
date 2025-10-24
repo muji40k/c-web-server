@@ -13,6 +13,7 @@
 
 #include "multiplexer.h"
 #include "pselect.h"
+#include "epoll.h"
 #include "worker.h"
 #include "list.h"
 
@@ -171,6 +172,7 @@ server_t *server_init(int port, size_t max_threads)
 
     if (EXIT_SUCCESS == rc) {
         server->multiplexer = pselect_multiplexer();
+        // server->multiplexer = epoll_multiplexer();
 
         if (NULL == server->multiplexer) {
             rc = errno;
