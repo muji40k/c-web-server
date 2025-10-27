@@ -9,14 +9,17 @@
 #include "server.h"
 #include "handler.h"
 
+#include "pselect.h"
+
+#include "threads.h"
+
 #include "index_request.h"
 #include "partial_file_request.h"
 #include "unknown_request.h"
 
 #include <unistd.h>
 
-struct args
-{
+struct args {
     int valid;
     const char *cwd;
     int port;
@@ -136,7 +139,6 @@ arg_res_t args_log_level(struct args *args, char ***arg, char **end)
     return res;
 }
 
-
 static const arg_parser_t parsers[] = {
     args_thread, args_port, args_cwd, args_log_level
 };
@@ -178,8 +180,15 @@ int set_server_root(const struct args *const args)
     return EXIT_SUCCESS;
 }
 
-server_t *setup_server(const struct args *const args)
+server_config_t setup_server(const struct args *const args)
 {
+    server_config_t out = {
+        .addr = INADDR_ANY,
+        .port = args->port,
+        .handlers = NULL,
+        .runner = NULL,
+    };
+
     struct sigaction new_action;
     new_action.sa_handler = server_termination_handler;
     sigemptyset(&new_action.sa_mask);
@@ -187,26 +196,23 @@ server_t *setup_server(const struct args *const args)
 
     if (-1 == sigaction(SIGINT, &new_action, NULL)) {
         LOG_M(ERROR, "Unable to set sigaction");
-        return NULL;
+        return out;
     }
 
     int rc = server_setup();
-    server_t *server = NULL;
+    handler_t handler;
 
     if (EXIT_SUCCESS == rc) {
-        server = server_init(args->port, args->threads);
+        out.handlers = handler_list_init();
 
-        if (NULL == server) {
-            LOG_M(ERROR, "Unable to init server");
+        if (NULL == out.handlers) {
             rc = errno;
         }
     }
 
-    handler_t handler;
-
     if (EXIT_SUCCESS == rc) {
         handler = index_request_get();
-        rc = server_register_handler(server, &handler);
+        rc = handler_list_push(out.handlers, &handler);
     }
 
     if (EXIT_SUCCESS == rc) {
@@ -251,20 +257,27 @@ server_t *setup_server(const struct args *const args)
             file_type_bank_add(bank, &type);
 
             handler = partial_file_request_get(bank);
-            rc = server_register_handler(server, &handler);
+            rc = handler_list_push(out.handlers, &handler);
         }
     }
 
     if (EXIT_SUCCESS == rc) {
         handler = unknown_request_get();
-        rc = server_register_handler(server, &handler);
+        rc = handler_list_push(out.handlers, &handler);
+    }
+
+    if (EXIT_SUCCESS == rc) {
+        threads_server_config_t config = threads_server_config();
+        config.max_threads = args->threads;
+        config.multiplexer = pselect_multiplexer();
+        out.runner = threads_server_init(&config);
     }
 
     if (EXIT_SUCCESS == rc) {
         LOG_M(INFO, "Server setup correct");
     }
 
-    return server;
+    return out;
 }
 
 int main(int argc, char **argv)
@@ -281,14 +294,16 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    server_t *server = setup_server(&args);
+    server_config_t config = setup_server(&args);
 
-    if (NULL == server) {
+    if (NULL == config.runner || NULL == config.handlers) {
         return EXIT_FAILURE;
     }
 
-    int rc = server_mainloop(server);
-    server_free(&server);
+    int rc = serve(&config);
+
+    server_free(&config.runner);
+    handler_list_free(&config.handlers);
     server_destroy();
 
     LOG_CLOSE();

@@ -41,6 +41,7 @@ multiplexer_t *epoll_multiplexer(void)
         return errno = ERROR_MULTIPLEXER_ALLOCATION, NULL;
     }
 
+    multiplexer_t *out = NULL;
     int rc = EXIT_SUCCESS;
     inner->fd = 0;
     inner->mutex_init = 0;
@@ -68,13 +69,21 @@ multiplexer_t *epoll_multiplexer(void)
         }
     }
 
+    if (EXIT_SUCCESS == rc) {
+        out = multiplexer_init(inner, wait_func, add_func, timeout_func,
+                               remove_func, clear_func, free_func);
+
+        if (NULL == out) {
+            rc = errno;
+        }
+    }
+
     if (EXIT_SUCCESS != rc) {
         free_func((void **)&inner);
         return errno = rc, NULL;
     }
 
-    return multiplexer_init(inner, wait_func, add_func, timeout_func,
-                            remove_func, clear_func, free_func);
+    return out;
 }
 
 static int check(epoll_container_t *container)
